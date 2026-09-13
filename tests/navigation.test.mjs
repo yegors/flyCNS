@@ -18,7 +18,7 @@ function scene(heading) {
 
 test('pixel matching recovers left/right yaw and closes the visual loop', () => {
   const reference = describeImage(scene(0));
-  for (const heading of [-27, -16, 0, 19, 26]) {
+  for (const heading of [-27, -26.7, -16, -16.3, 0, 19, 19.4, 26]) {
     const result = matchView(reference, describeImage(scene(heading)));
     assert.ok(result.valid, JSON.stringify(result));
     assert.ok(Math.abs(result.errorDeg - heading) <= 1, JSON.stringify(result));

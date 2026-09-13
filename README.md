@@ -1,65 +1,71 @@
-# flyCNS
+# Fly buddy / flyCNS
 
-## Street View route experiment
+## A street-learning experiment
 
-The lab now supports a bounded **A → B taught-route experiment**: select two map
-points, teach a route through connected Google panoramas, then run the fly with
-visual feedback. A seeded heading perturbation at each stop is corrected by
-matching the current image against its taught view. Two aligned observations
-authorize the next connected panorama step. Occluded vision stops movement.
+Choose a start and finish, click **Learn trip**, then **Try from memory**. The fly
+learns which street views mean go, avoid, or stop. During a test it chooses from
+these memories; it is no longer handed a list of next stops. If it does not
+recognize a safe direction, it stops.
 
-**Scientific scope:** this is an external visual controller observing the live
-MaleCNS simulation. It does not demonstrate that the connectome learned a route.
-Coordinates and Google panorama links are used by the route teacher; only image
-signatures enter the heading-error matcher. Translation uses the taught link.
-The camera is Google's capture camera, not a reconstruction of a fly at street
-level. Read [AUDIT.md](AUDIT.md) for the audit and remaining limitations.
+This learning module is separate from the simulated biological brain. The brain
+receives visual input, but its connections do not learn the route. Read
+[AUDIT.md](AUDIT.md) for the experiment contract and scientific limits.
 
-Run `.venv/Scripts/python -m flylab serve` and open http://127.0.0.1:8000.
-
-1. Configure the key as described below. Enable **Maps JavaScript API** and
-   **Street View Static API**, with Google Cloud billing configured.
-2. Use the default short Toronto route, enter `latitude, longitude`, or select
-   **Pick A/B on map**. Points must be within 500 m and snap to different panoramas.
-3. Click **Teach route**, then **Run trial**. Teaching may fail if coverage is
-   disconnected or the graph/image budget is exceeded; choose a shorter route.
-4. Repeat using **Vision occluded (control)** and the same seed. Expected result:
-   no movement. Compare exported trial JSON, not just the animation.
-5. **Pause**, **Stop**, **Export JSON**, and **Free exploration** control the trial.
-
-Each observation records heading error, image correlation, ambiguity margin,
-simulation time and smoothed neural readouts after at least 100 ms of biological
-exposure. Exports include route/date metadata, seed, condition, model settings,
-distance, request counts and explicit outcome. A session has a 160-image budget;
-teaching allows 180 graph expansions and 25 panoramas. Trials have a five-minute
-active wall-time limit. Google usage can be billable. Images and image signatures
-are not included in exports; imagery is held briefly in memory only.
-
-The default specimen uses **85 published anatomical meshes / 272,550 triangles**
-from Janelia/DeepMind's flybody reconstruction, with joint hierarchy, original
-material assignments and local asset provenance. This specimen is **female**;
-the CNS dataset is **male**. Motion is illustrative joint animation, without
-MuJoCo dynamics. The selector also provides the corrected procedural male model
-with six articulated legs, trochanters, five tarsomeres, individual foreleg sex
-comb teeth, posterior pigmentation, compound-eye lenses, ocelli and halteres.
-See [anatomy attribution](flylab/web/assets/flybody/NOTICE.md) and the included
-Apache-2.0 license. Rebuild these assets with
-`.venv/Scripts/python scripts/import_flybody.py`.
-
-Validation:
-
-```bash
-node --test tests/*.test.mjs
-.venv/Scripts/python -m unittest discover -s tests -p "test_*.py" -v
+```powershell
+.venv/Scripts/python -m flylab serve --port 8001
 ```
 
-Local verification on 2026-09-13 after API activation: Maps JavaScript display,
-Street View metadata and actual Static imagery work. A live default Toronto
-trial **arrived at B** over one connected 15 m step, using three visual
-observations and ending at 0° heading error. A transient Google `UNKNOWN_ERROR`
-on the first lookup cleared after repeating Teach route. The live CUDA/backend
-smoke check also passed. Offline tests exercise pixel alignment and the full
-trial state machine, including arrival, occlusion, pause/resume and cancellation.
+Open http://127.0.0.1:8001. The default is a short trip along Bay Street, Toronto.
+
+1. Click **Learn trip**. The lesson displays the views being remembered.
+2. Click **Try from memory**. The fly looks around, selects a remembered direction,
+   follows the street, and tries to recognize the finish.
+3. **Pause / Resume** and **Stop** control the same trip. **Show trip** fits the map.
+4. In **Try a learning test**, compare learned memory with **No memory** or
+   **Covered eyes**. Those comparisons should stop without moving. The optional
+   wrong-turn condition starts at a specifically demonstrated recovery location.
+5. Choose new points with **Choose start/finish on map**, or enter coordinates in
+   the collapsed section. **Forget trip** clears memories. Reload also clears them.
+
+**Brain details** reveals the original neuroscience instruments. They are hidden
+by default so the main screen stays focused on the street journey.
+
+Movement follows connected public OSM roads and basic one-way rules. No buildings
+are crossed to shortcut the trip. Google Street View supplies the photos, while
+OpenStreetMap supplies road geometry. Traffic lights, vehicles, lanes and turn
+restriction relations are not simulated. The camera changes at panorama stops;
+the icon moves smoothly along the mapped road between them. This is not a
+self-driving safety system or a model of real flight.
+
+The detailed specimen contains 85 published anatomical meshes / 272,550 triangles
+from Janelia/DeepMind flybody. It is female; the CNS is male. Motion is illustrative.
+See [asset provenance and license](flylab/web/assets/flybody/NOTICE.md).
+
+## Limits and setup
+
+Enable **Maps JavaScript API** and **Street View Static API**, with billing and
+appropriate key restrictions. Use the ignored `flylab.local.json` or environment
+configuration described below. No extra Google routing API is required. The road
+extract comes from the public Overpass service; if it is unavailable, learning
+stops with a retry message. Google requests may be billable.
+
+Trips are bounded to 500 m between selected points and 12 route stops. A learning
+session allows 240 image requests; each test has a five-minute/36-step ceiling.
+A lesson uses at most 180 Google metadata requests. Google imagery is retained
+briefly in memory; exported results exclude both images and visual signatures.
+Only one browser experiment should use the global neural simulation at a time.
+
+```powershell
+node --test tests/*.test.mjs
+.venv/Scripts/python -m unittest discover -s tests -p "test_*.py" -v
+.venv/Scripts/python scripts/smoke_lab.py http://127.0.0.1:8001
+```
+
+Verified locally on 2026-09-13: 27 automated tests passed. Two live learned-memory
+trials reached the finish over 103 m; a demonstrated wrong-turn recovery reached
+it over 114 m. No-memory and covered-eyes comparisons each stopped at 0 m. Live
+pause/resume and the GPU connection also passed. These are short demonstrated
+route tests, not proof of reliable navigation throughout an unfamiliar city.
 
 ## Connectome engine and earlier experiments
 
@@ -95,6 +101,10 @@ Then build the cached brain once (about 10 s):
 ```
 
 ## The web lab
+
+The descriptions below document the original neuroscience sandbox. The current
+journey interface replaces its free-roaming map controls with the street-learning
+workflow above; Brain details retains the neural instruments.
 
 ```bash
 .venv/Scripts/python -m flylab serve      # then open http://127.0.0.1:8000
@@ -302,3 +312,4 @@ Experiments: `flylab/experiments/`. Web server and protocol: `flylab/server.py`,
 Data: FlyEM (HHMI Janelia), Cambridge Connectomics, MRC LMB, Google Research. Model: Shiu et al.
 2024. Taste cell-type assignments: the companion taste connectome (Cell 2026) as summarised in
 TheMrRaGe/flybrain FINDINGS.md, whose empirical notes on this dataset were invaluable.
+

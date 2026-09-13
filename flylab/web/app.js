@@ -1,9 +1,9 @@
 import { BrainView } from './brain.js';
 import { FlyView } from './fly.js';
 import { MapView } from './map.js';
-import { EyesView } from './eyes.js';
+import { EyesView } from './eyes.js?v=2';
 import { ExperimentsView } from './experiments.js';
-import { NavigationLab } from './navigation.js';
+import { NavigationLab } from './navigation.js?v=2';
 
 const $ = (s) => document.querySelector(s);
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -54,6 +54,10 @@ async function main() {
     if (!on && app.tab !== 'lab') showTab('lab');
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('max'));
     $('#lab').classList.remove('has-max');
+    document.querySelectorAll('.panel .exp').forEach(button => {
+      const name = { map: 'map', eyes: 'street view', brain: 'brain', fly: 'fly' }[button.closest('.panel').dataset.panel];
+      button.textContent = '⤢'; button.setAttribute('aria-label', `Expand ${name}`);
+    });
     setTimeout(resizeAll, 30);
   };
   const ro = new ResizeObserver(() => resizeAll());
@@ -64,6 +68,11 @@ async function main() {
     document.querySelectorAll('.panel').forEach((x) => x.classList.remove('max'));
     lab.classList.toggle('has-max', on); if (on) p.classList.add('max');
     b.textContent = on ? '⤡' : '⤢';
+    for (const button of document.querySelectorAll('.panel .exp')) {
+      const name = { map: 'map', eyes: 'street view', brain: 'brain', fly: 'fly' }[button.closest('.panel').dataset.panel];
+      button.setAttribute('aria-label', button === b && on ? 'Return to overview' : `Expand ${name}`);
+      if (button !== b) button.textContent = '⤢';
+    }
     setTimeout(resizeAll, 30);
   }));
   $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showTab(b.dataset.view); });

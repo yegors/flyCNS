@@ -7,7 +7,7 @@ globalThis.document = { getElementById: () => null };
 function signature(place, heading = 0) {
   return Float32Array.from({ length: 819 }, (_, i) => {
     const a = i % 91 - 45 + heading, row = Math.floor(i / 91);
-    return .5 + .12 * Math.sin(a * (.33 + place * .01) + row * (place + 1)) + .13 * Math.cos(a * (.16 + place * .007) - row * .45) + .1 * Math.sin(a * (.8 + place * .03) + Math.sin(row + place));
+    return .5 + .12 * Math.sin(a * .43 + row + place * row * .91) + .13 * Math.cos(a * .19 - row * .45 + place * row * row * .17) + .1 * Math.sin(a * .91 + Math.sin(row) + place * row * .31);
   });
 }
 function fixture(condition = 'intact') {
@@ -53,4 +53,18 @@ test('pause holds an in-flight observation until resume', async () => {
 test('visual false-positive destination fails the independent location scorer', async () => {
   const { nav, app } = fixture(); nav.memory.clear(); nav.memory.learn(signature(1), 'stop');
   await nav.start(); assert.equal(nav.state, 'failed'); assert.equal(app.views.map.w.lng, 0);
+});
+
+test('pause freezes road movement; stopping records partial distance accurately', async () => {
+  const { nav, app } = fixture(); nav.state = 'running'; nav.started = performance.now(); nav.pausedMs = 0; nav.travelled = 0; nav.trial = {}; nav.condition = 'intact';
+  const link = { id: 'b', path: [{lat:0,lng:0},{lat:0,lng:.0001}] };
+  const journey = nav.travel(link, nav.epoch).catch(error => error);
+  await new Promise(resolve => setTimeout(resolve, 75)); nav.pause();
+  const position = app.views.map.w.lng;
+  await new Promise(resolve => setTimeout(resolve, 140));
+  assert.equal(app.views.map.w.lng, position);
+  nav.stop(); const result = await journey;
+  assert.equal(result.name, 'AbortError'); assert.ok(nav.trial.travelledMeters > 0);
+  assert.equal(nav.trial.travelledMeters, nav.trial.partialTransition.meters);
+  assert.equal(nav.state, 'stopped');
 });

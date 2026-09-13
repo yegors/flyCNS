@@ -1,5 +1,5 @@
-import { wrap, distance, parsePoint, seededRandom, planRoute, describeImage, matchView } from './navigation-core.js';
-import { StreetGraph, VisualMemory, pathLength, pointAlong } from './street-learning.js';
+import { distance, parsePoint, seededRandom, planRoute, describeImage } from './navigation-core.js';
+import { StreetGraph, VisualMemory, pathLength, pointAlong, matchMemory } from './street-learning.js';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const ZERO = { cmd: 'senses', odor_L: 0, odor_R: 0, sugar: 0, loom: 0, hunger: 0, wander_L: 0, wander_R: 0 };
@@ -89,12 +89,13 @@ export class NavigationLab {
   }
   stop(reason = 'Stopped. Your learned memories are still here.') {
     this.epoch++; this.abort?.abort(); this.motor = {}; this.app.send(ZERO);
+    this.app.views.eyes.holdNavigation?.();
     if (this.trial && ['running', 'paused'].includes(this.state)) this.finish('stopped', reason);
-    else { this.route = []; this.memory.clear(); this.q('#nav-memory').textContent = '0'; this.setState('stopped'); this.status(reason); }
+    else { this.route = []; this.memory.clear(); this.line?.setMap(null); this.q('#nav-memory').textContent = '0'; this.setState('stopped'); this.status('Learning stopped. Press Learn trip to start a new lesson.'); }
   }
   pause() {
     if (this.state === 'running') { this.pauseAt = performance.now(); this.motor = {}; this.app.send({ cmd: 'pause' }); this.setState('paused'); this.status('Paused. Press Resume to continue.'); }
-    else if (this.state === 'paused') { this.pausedMs += performance.now() - this.pauseAt; this.app.send({ cmd: 'play' }); this.setState('running'); }
+    else if (this.state === 'paused') { this.pausedMs += performance.now() - this.pauseAt; this.app.send({ cmd: 'play' }); this.setState('running'); this.status('Resuming the trip…'); }
   }
   async checkpoint(epoch) {
     while (this.state === 'paused' && epoch === this.epoch) await delay(80);
@@ -114,7 +115,7 @@ export class NavigationLab {
         if (!p?.pano || !p.latLng) throw new Error('No Street View coverage here. Choose another street.');
         const node = { id: p.pano, lat: p.latLng.lat(), lng: p.latLng.lng(), copyright: d.copyright || '', date: d.imageDate || '', heading: d.tiles?.centerHeading || 0,
           rawLinks: (d.links || []).filter(l => l.pano && Number.isFinite(l.heading)).map(l => ({ id: l.pano, heading: l.heading })) };
-        node.road = this.streets.snap(node); this.nodes.set(node.id, node); return node;
+        node.road = this.streets.snap(node, 18, node.heading); this.nodes.set(node.id, node); return node;
       } catch (error) {
         if (epoch !== this.epoch) throw error;
         if (attempt === 2 || !String(error.message).includes('UNKNOWN_ERROR')) throw error;
@@ -172,6 +173,7 @@ export class NavigationLab {
     try {
       if (this.app.views.map.adapter.name !== 'Google Maps' || this.app.views.map.adapter.authFailed) throw new Error('Google Maps is unavailable. Check the API key and reload.');
       const a = parsePoint(this.q('#nav-a').value), b = parsePoint(this.q('#nav-b').value);
+      if ([a, b].some(p => Math.abs(p.lat) > 80 || Math.abs(p.lng) > 179.9)) throw new Error('Choose a city below 80° latitude and away from the date line.');
       if (distance(a, b) > 500) throw new Error('Start with a short trip: choose points less than 500 m apart.');
       this.status('Finding city streets…');
       const response = await fetch(`/api/roads?lat=${(a.lat + b.lat) / 2}&lng=${(a.lng + b.lng) / 2}`, { signal: this.abort.signal });
@@ -212,7 +214,10 @@ export class NavigationLab {
       this.status(`Trip learned: ${Math.round(this.routeLength())} m, ${this.memory.size} visual memories. Now try it from memory.`);
       this.q('#nav-points').textContent = `${start.road.segment.name} → ${goal.road.segment.name}. Points moved ${this.snap.a.toFixed(0)} / ${this.snap.b.toFixed(0)} m to street coverage.`;
     } catch (error) {
-      if (epoch === this.epoch) { this.route = []; this.memory.clear(); this.q('#nav-memory').textContent = '0'; this.setState('error'); this.status(error.message || String(error)); }
+      if (epoch === this.epoch) {
+        console.warn('Street trip preparation: ' + JSON.stringify({ error: error.message, first: [...(this.nodes?.values() || [])].slice(0, 4).map(n => ({ id: n.id, lat: n.lat, lng: n.lng, date: n.date, roadGap: n.road?.gap, links: n.links?.map(l => l.id) })), closest: this.requested ? [...this.nodes.values()].sort((a,b) => distance(a,this.requested.b)-distance(b,this.requested.b)).slice(0,5).map(n => ({id:n.id,lat:n.lat,lng:n.lng,date:n.date,roadGap:n.road?.gap,exits:n.links?.length})) : [] }));
+        this.route = []; this.memory.clear(); this.line?.setMap(null); this.app.views.eyes.holdNavigation?.(); this.q('#nav-memory').textContent = '0'; this.setState('error'); this.status(error.message || String(error));
+      }
     }
   }
   routeLength() { return this.route.slice(1).reduce((sum, n, i) => sum + pathLength(this.route[i].links.find(l => l.id === n.id).path), 0); }
@@ -231,17 +236,20 @@ export class NavigationLab {
   }
   async travel(link, epoch) {
     const meters = pathLength(link.path); let moved = 0;
+    if (this.trial) this.trial.partialTransition = { to: link.id, meters: 0 };
     while (moved < meters) {
       await this.checkpoint(epoch); this.motor = { walk: 20 };
       const before = performance.now(); await delay(50);
       await this.checkpoint(epoch);
       // Bound each frame: a background tab or a pause must never jump the fly.
       const step = Math.min(.1, (performance.now() - before) / 1000) * 8;
-      moved = Math.min(meters, moved + step);
+      const advance = Math.min(meters - moved, step); moved += advance; this.travelled += advance;
+      if (this.trial) this.trial.partialTransition.meters = moved;
       const p = pointAlong(link.path, moved); this.app.views.map.snapTo(p.lat, p.lng); this.app.views.map.w.heading = p.heading;
-      this.q('#nav-distance').textContent = `${Math.round(this.travelled + moved)} m`;
+      this.q('#nav-distance').textContent = `${Math.round(this.travelled)} m`;
     }
-    this.travelled += meters; this.motor = {};
+    if (this.trial) delete this.trial.partialTransition;
+    this.motor = {};
   }
   async start() {
     if (this.busy || this.route.length < 2 || !this.memory.size) return;
@@ -286,7 +294,10 @@ export class NavigationLab {
         const choice = learner.choose(observations);
         this.samples.push({ step, simMs: this.app.simT, elapsedMs: Math.round(performance.now() - this.started - this.pausedMs), ...choice, rates: { ...this.app.ema } });
         if (choice.action === 'unknown') {
-          this.finish(condition === 'blank' ? 'occluded' : condition === 'empty' ? 'untrained' : 'failed', condition === 'blank' ? 'Covered eyes: I cannot see, so I stayed still.' : choice.reason); return;
+          const evidence = observations.map(o => learner.rank(o).slice(0, 2));
+          this.samples.at(-1).recognition = evidence;
+          console.info('Visual decision stopped: ' + JSON.stringify(evidence));
+          this.finish(condition === 'blank' ? 'occluded' : condition === 'empty' ? 'untrained' : 'failed', condition === 'blank' ? 'Covered eyes: I cannot see, so I stayed still.' : condition === 'empty' ? 'Without my memories, I do not know which way to go. I stayed still.' : choice.reason); return;
         }
         this.q('#nav-confidence').textContent = `${Math.round(choice.correlation * 100)}%`;
         if (choice.action === 'stop') {
@@ -303,7 +314,7 @@ export class NavigationLab {
           this.status('I remember this direction. Turning to face it…');
           const image = await this.image(current, heading, epoch); await this.checkpoint(epoch);
           this.app.views.eyes.showNavigation(image.canvas, false, current.copyright); await this.expose(epoch);
-          match = matchView(learner.examples[choice.memory].signature, image.descriptor);
+          match = matchMemory(learner.examples[choice.memory].signature, image.descriptor);
           if (!match.valid) throw new Error('The view became unclear while turning. I stopped.');
           this.q('#nav-error').textContent = `${Math.round(match.errorDeg)}°`;
           stable = Math.abs(match.errorDeg) <= 3 ? stable + 1 : 0;
@@ -359,3 +370,4 @@ export class NavigationLab {
     this.fit();
   }
 }
+

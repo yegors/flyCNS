@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { StreetGraph, VisualMemory, pointAlong, pathLength } from '../flylab/web/street-learning.js';
 const signature = (place, heading = 0) => Float32Array.from({ length: 819 }, (_, i) => {
   const a = i % 91 - 45 + heading, row = Math.floor(i / 91);
-  return .5 + .12 * Math.sin(a * (.33 + place * .01) + row * (place + 1)) + .13 * Math.cos(a * (.16 + place * .007) - row * .45) + .1 * Math.sin(a * (.8 + place * .03) + Math.sin(row + place));
+  return .5 + .12 * Math.sin(a * .43 + row + place * row * .91) + .13 * Math.cos(a * .19 - row * .45 + place * row * row * .17) + .1 * Math.sin(a * .91 + Math.sin(row) + place * row * .31);
 });
 const way = (id, nodes, geometry, tags = {}) => ({ id, nodes, geometry, tags: { highway: 'residential', ...tags } });
 
@@ -47,3 +47,13 @@ test('road restrictions reject reverse one-way travel, footpaths and private roa
   assert.equal(s.snap({ lat: .001, lng: .0005 }), null);
 });
 export { signature };
+
+test('capture heading resolves ambiguous road assignment at a crossing', () => {
+  const s = new StreetGraph([
+    way(1, [1,2], [{lat:0,lon:0},{lat:.001,lon:0}], {name:'North street'}),
+    way(2, [3,4], [{lat:.0005,lon:-.001},{lat:.0005,lon:.001}], {name:'Cross street',oneway:'yes'})
+  ]);
+  const p={lat:.00049,lng:.00002};
+  assert.equal(s.snap(p).segment.name,'Cross street');
+  assert.equal(s.snap(p,18,0).segment.name,'North street');
+});

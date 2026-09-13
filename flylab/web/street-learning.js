@@ -1,4 +1,4 @@
-import { clamp, distance, matchView } from './navigation-core.js';
+import { clamp, distance, wrap } from './navigation-core.js';
 
 export const bearing = (a, b) => Math.atan2((b.lng - a.lng) * Math.cos(a.lat * Math.PI / 180), b.lat - a.lat) * 180 / Math.PI;
 export const interpolate = (a, b, t) => ({ lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t });
@@ -10,6 +10,27 @@ export function pointAlong(path, meters) {
     meters -= length;
   }
   return { ...path.at(-1), heading: bearing(path.at(-2) || path[0], path.at(-1)) };
+}
+
+// Use the whole overlapping view for place recognition. The original yaw demo
+// only compared a narrow strip around the vanishing point, which makes similar
+// looking streets indistinguishable and discards useful buildings at the sides.
+export function matchMemory(reference, observation) {
+  if (reference.length !== 819 || observation.length !== 819) throw new Error('Invalid visual signature.');
+  const scores = [];
+  for (let shift = -35; shift <= 35; shift++) {
+    let n = 0, a = 0, b = 0, aa = 0, bb = 0, ab = 0;
+    for (let row = 0; row < 9; row++) for (let x = Math.max(0, shift); x < Math.min(91, 91 + shift); x++) {
+      const u = reference[row * 91 + x], v = observation[row * 91 + x - shift];
+      n++; a += u; b += v; aa += u * u; bb += v * v; ab += u * v;
+    }
+    const va = aa - a * a / n, vb = bb - b * b / n;
+    scores.push({ shift, score: va / n < .00015 || vb / n < .00015 ? -1 : (ab - a * b / n) / Math.sqrt(va * vb) });
+  }
+  scores.sort((a, b) => b.score - a.score);
+  const best = scores[0], rival = scores.find(s => Math.abs(s.shift - best.shift) > 5);
+  return { errorDeg: best.shift, correlation: best.score, margin: best.score - rival.score,
+    valid: best.score > .86 && best.score - rival.score > .015 && Math.abs(best.shift) < 35 };
 }
 
 // Geometry belongs to the environment, never to VisualMemory. Movement follows
@@ -41,14 +62,19 @@ export class StreetGraph {
       }
     }
   }
-  snap(p, maxDistance = 18) {
+  snap(p, maxDistance = 18, cameraHeading = null) {
     let best = null;
     const sx = Math.cos(p.lat * Math.PI / 180);
     for (const segment of this.segments) {
       const { a, b } = segment, dx = (b.lng - a.lng) * sx, dy = b.lat - a.lat;
       const t = clamp(((p.lng - a.lng) * sx * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy), 0, 1);
       const point = interpolate(a, b, t), gap = distance(p, point);
-      if (gap <= maxDistance && (!best || gap < best.gap)) best = { ...point, t, segment, gap };
+      const angle = cameraHeading === null ? 0 : Math.abs(wrap(cameraHeading - bearing(a, b)));
+      // Capture-car orientation resolves road assignment at intersections. A
+      // nearest-point-only snap can incorrectly put a Bay Street photo onto a
+      // crossing one-way street a fraction of a metre closer to its GPS point.
+      const score = gap + Math.min(angle, 180 - angle) * .09;
+      if (gap <= maxDistance && (!best || score < best.score)) best = { ...point, t, segment, gap, score };
     }
     return best;
   }
@@ -94,10 +120,15 @@ export class VisualMemory {
   }
   clear() { this.examples = []; }
   get size() { return this.examples.length; }
+  rank(signature) {
+    return this.examples.map((example, memory) => ({ ...matchMemory(example.signature, signature), action: example.action, memory }))
+      .sort((a, b) => b.correlation - a.correlation);
+  }
   recognize(signature) {
-    const ranked = this.examples.map((example, memory) => ({ ...matchView(example.signature, signature), action: example.action, memory }))
-      .filter(m => m.valid).sort((a, b) => b.correlation - a.correlation);
-    const best = ranked[0]; if (!best) return null;
+    const ranked = this.rank(signature);
+    // An ambiguous strongest match must not fall through to a weaker, unrelated
+    // memory. Place/action recognition needs stricter evidence than yaw alone.
+    const best = ranked[0]; if (!best?.valid || best.correlation < .86) return null;
     const rival = ranked.find(m => m.action !== best.action);
     if (rival && best.correlation - rival.correlation < .035) return null;
     return best;

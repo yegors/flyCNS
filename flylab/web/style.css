@@ -275,3 +275,11 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px
   .buddy-mode .ph { padding: 9px; }
   .buddy-mode .ph .muted { display: none; }
 }
+@media (min-width: 721px) {
+  .buddy-mode main#view { max-height: 900px; }
+  .buddy-mode aside#panel { max-height: 900px; }
+}
+@media (min-width: 721px) and (max-width: 1100px) {
+  .buddy-mode main#view { max-height: 720px; }
+  .buddy-mode .lab { grid-template-rows: minmax(240px, .85fr) minmax(240px, 1fr); }
+}

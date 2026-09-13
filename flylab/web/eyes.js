@@ -167,7 +167,7 @@ export class EyesView {
     } else { g.fillStyle = '#8a93a6'; g.font = `${14 * devicePixelRatio}px Inter`; g.textAlign = 'center'; g.fillText('Click Learn trip to open your fly’s eyes.', cw / 2, ch / 2); }
     const q = (s) => this.el.querySelector(s);
     q('#eye-mode').textContent = this.source === 'off' ? 'off' : ['street', 'navigation'].includes(this.source) ? 'Street View' : this.source;
-    q('#eye-info').textContent = this.source === 'off' ? '' : document.body.classList.contains('show-brain') ? `heading ${Math.round(((w.heading % 360) + 360) % 360)}° · ${this.frontal.length} of ${this.retina.n} photoreceptors in view` : this.navigationHeld ? 'Last view · stopped' : 'Looking at the street';
+    q('#eye-info').textContent = this.source === 'off' ? '' : this.app.navigation?.state === 'paused' ? 'Paused · current view' : document.body.classList.contains('show-brain') ? `heading ${Math.round(((w.heading % 360) + 360) % 360)}° · ${this.frontal.length} of ${this.retina.n} photoreceptors in view` : this.navigationHeld ? 'Last view · stopped' : 'Looking at the street';
     q('#eye-l').textContent = this.source === 'off' ? '–' : this.meanL.toFixed(2); q('#eye-r').textContent = this.source === 'off' ? '–' : this.meanR.toFixed(2);
     q('#eye-status').textContent = this.svStatus;
     const m = this.app.ema;

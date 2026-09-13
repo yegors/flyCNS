@@ -301,6 +301,13 @@ def create_app(min_weight: int = 5, fix: bool = True, use_graph: bool = True) ->
     lab = Lab(min_weight=min_weight, fix=fix, use_graph=use_graph)
     app = FastAPI(title="flyCNS lab")
     app.state.lab = lab
+    @app.middleware("http")
+    async def fresh_lab_ui(request, call_next):
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.endswith((".js", ".css", ".html")):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     RESULTS.mkdir(exist_ok=True)
     app.mount("/static", StaticFiles(directory=WEB), name="static")
     app.mount("/results", StaticFiles(directory=RESULTS), name="results")

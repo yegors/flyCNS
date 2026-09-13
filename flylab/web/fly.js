@@ -304,8 +304,9 @@ export class FlyView {
     else this.fly.group.rotation.y -= turn * dt;
     this.gridTex.offset.y -= s.speed * 0.02 * dt;
     const mode = s.jumping ? 'jumping' : s.flying ? 'flying' : s.eating ? 'proboscis extended' : s.grooming ? 'grooming' : s.singing ? 'singing' : s.backing ? 'backing up' : s.walk > 0.05 ? 'walking' : s.buzzing ? 'wings buzzing' : 'idle';
-    this.title.innerHTML = `<span style="color:var(--amber)">${mode}</span> · ${nav?.active ? 'visual controller' : 'neural readouts'}<br><span class="muted">${this.fly.reference ? 'Janelia / DeepMind · female anatomy, male CNS · illustrative motion' : 'Male illustration · 6 legs · 2 wings · halteres · sex combs'}</span>`;
+    this.title.innerHTML = `<span style="color:var(--amber)">${mode}</span> · ${nav?.active ? 'street journey' : 'brain activity'}<br><span class="muted">${this.fly.reference ? 'Janelia / DeepMind · female anatomy, male CNS · illustrative motion' : 'Male illustration · 6 legs · 2 wings · halteres · sex combs'}</span>`;
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
 }
+

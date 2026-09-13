@@ -68,8 +68,15 @@ export function describeImage({ data, width, height }) {
   for (let row = 0; row < 9; row++) for (let col = 0; col < 91; col++) {
     const p = projectRay(col - 45, (row - 4) * 4, width, height);
     if (!p) continue;
-    const k = (p[1] * width + p[0]) * 4;
-    values[row * 91 + col] = (data[k] * .2126 + data[k + 1] * .7152 + data[k + 2] * .0722) / 255;
+    // Local low-pass filtering prevents sub-degree camera turns from changing
+    // single-pixel samples wildly on windows, leaves and JPEG edges.
+    let luminance = 0, weight = 0;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      const x = clamp(p[0] + dx, 0, width - 1), y = clamp(p[1] + dy, 0, height - 1);
+      const k = (y * width + x) * 4, w = (3 - Math.abs(dx)) * (3 - Math.abs(dy));
+      luminance += (data[k] * .2126 + data[k + 1] * .7152 + data[k + 2] * .0722) * w; weight += w;
+    }
+    values[row * 91 + col] = luminance / (255 * weight);
   }
   return values;
 }

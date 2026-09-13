@@ -6,7 +6,7 @@
 <title>Fly buddy · Street journeys</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v=2">
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
             "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
@@ -79,12 +79,12 @@
     <canvas id="spark" width="300" height="64"></canvas>
   </section>
   <section id="hint" class="muted small">
-    <b>How the loop works.</b> Route trials use an external visual controller while the MaleCNS model receives retinal input and records responses. Free exploration uses neural motor readouts and optional map senses. Retinal directions are estimated from lamina anatomy. The published female body reference and procedural male illustration both use illustrative motion.
+    <b>What the brain panel shows.</b> The memory learner chooses street directions. The simulated MaleCNS brain receives visual input and its responses appear here; its connections are not learning the trip. Retinal directions are approximate. The detailed body is female and its movement is animated.
   </section>
 </div>
 </aside>
 <div id="tooltip" hidden></div>
 <div id="toast" hidden></div>
-<script type="module" src="/static/app.js"></script>
+<script type="module" src="/static/app.js?v=2"></script>
 </body>
 </html>

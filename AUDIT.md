@@ -1,96 +1,101 @@
-# Repository audit and experiment contract · 2026-09-13
+# Street-learning audit · 2026-09-13
 
-Scope: data loading, LIF engine, live server/protocol, map and eye feedback,
-specimen geometry, experiment controls and existing documentation. This was a
-functional/scientific audit and implementation pass, not an independent
-replication of the existing neuroscience findings.
+## What this version builds
 
-## Findings and changes
+A local visual-memory learning experiment over real Google Street View photos.
+The main workflow is **choose A/B → Learn trip → Try from memory**. Brain tools
+are optional. The detailed Janelia/DeepMind female fly body remains available;
+MaleCNS is male, and body motion is illustrative rather than physical simulation.
 
-| Priority | Finding | Resolution |
+## Learning and testing are separate
+
+During a lesson, a bounded teacher finds a connected Street View route on public
+OSM roads. It observes available directions at every route stop and stores visual
+signatures paired with **go**, **avoid**, or **stop**. Where possible it also
+teaches one off-route neighbour with a legal return. This is episodic imitation
+learning: demonstrations add memories, not changes to the connectome's weights.
+
+During a test, the environment presents images of the locally available street
+directions in shuffled order, with seeded 10–20° camera perturbations. The learner
+compares these images against all its memories. Its interface receives no GPS,
+panorama IDs, destination coordinates, route index, or planned next-stop list.
+It selects a direction or recognizes the finish. The environment independently
+checks an arrival claim against the actual destination panorama; a visual false
+positive fails the trial. Tests never add or modify memories.
+
+The camera aligns using image error before movement. Movement follows OSM road
+polylines between connected Google panoramas, rather than interpolating directly
+across buildings. Simple one-way and access tags are respected. Capture-car
+heading helps assign photos to the correct road at intersections. Nearby road
+geometry and Google links are environment constraints, not learned perception.
+
+## What the experiment does not demonstrate
+
+- The biological fly brain has **not** learned navigation. It receives retinal
+  input and its responses are observed. The known inactive motion pathway is
+  not repaired by this change.
+- This is memory-based navigation through previously demonstrated views. It does
+  not establish generalization to unseen streets, seasons, weather or imagery.
+  It can return from a specifically demonstrated wrong turn, not arbitrary loss.
+- There is no traffic, lane keeping, signal recognition, vehicle avoidance,
+  turn-restriction relation handling, muscle physics or real flight dynamics.
+- Google panorama imagery is discontinuous and vehicle-height. A fly icon moves
+  smoothly on the road while the camera updates at panorama stops.
+- Google/OSM can disagree or lack coverage. Unmatched roads and uncertain images
+  cause a stop. This is not road-safety software or a real self-driving system.
+- Memories live in one browser tab and are cleared by Forget trip, point changes,
+  a new lesson or reload. Images/signatures are not written into result exports.
+- Multiple browser clients share one global neural simulation. Run one trial at
+  a time. Learned state, external imagery and timing are not fully reproducible.
+
+## Bugs addressed
+
+- Removed competing free-roaming controls from the journey; movement always stays
+  owned by the street environment, including before/after a trial.
+- Fixed stale browser code mixing the old controls with a new page: versioned
+  entry assets and no-store headers for HTML, JavaScript and CSS.
+- Fixed intersection road assignment: nearest geometry alone could put a Bay
+  Street panorama on a crossing one-way street and sever the route.
+- Replaced narrow-strip recognition and noisy single-pixel samples with smoothed
+  signatures and correlation over the full overlapping view.
+- An ambiguous strongest memory cannot fall through to a weaker wrong memory.
+  Conflicting actions and indistinguishable directions stop the learner.
+- Pause/Stop use cancellation checkpoints around asynchronous work. Late photos
+  cannot resume movement, and stopped photos remain visible without continuously
+  stimulating the retina. Partial movement is included in exported distance.
+- Controls, learned state and progress are reset together when the trip changes.
+  Brain modifications are blocked during a running test.
+- Street View transient UNKNOWN_ERROR receives bounded retries. Road extraction
+  uses bounded requests, timeouts, a small cache, and rejects partial responses.
+
+## Validation
+
+All 27 automated tests passed (19 JavaScript, 8 Python), and all browser JavaScript
+files passed syntax checks. The suite covers pixel yaw alignment, low-texture/occluded input,
+learned vs empty memory, conflicting examples, shuffled directions, destination
+false positives, learned recovery, directed street geometry, disconnected
+crossings, intersection assignment, request limits, cancellation, pause/resume,
+partial-distance accounting, API failures, key handling and anatomical assets.
+
+The live CUDA smoke test passes: 165,122 neurons, 1,382 retinal receptors, reset
+acknowledgement and binary retinal input. A real Bay Street lesson resolves a
+103 m road route and builds 25 visual memories. Browser verification observed:
+
+| Condition | Outcome | Distance |
 | --- | --- | --- |
-| P1 | No destination, route planning, arrival criterion or trial record existed. | Added bounded connected-panorama route teaching, visual alignment, explicit outcomes, seeds, occlusion controls and JSON export. |
-| P1 | The existing connectome's T4/T5 pathway is documented as silent; goal-directed visual navigation could not be attributed to it. | External controller is explicitly labelled; retina drives the CNS and neural activity is recorded. No claim of learned connectome navigation. |
-| P1 | Coordinate probes in the old Street View loop could select the same panorama or an unrelated location. | Route trials traverse only provider-declared directed links and request imagery by exact panorama ID. The old free-exploration mode remains a demonstration, outside the trial protocol. |
-| P1 | Failed imagery could leave stale visual input active; failures were retried on render ticks. | Status checks, bounded backoff, generation checks, exact image identity and stop-on-failure behavior. |
-| P1 | Latitude/longitude, panorama, heading, image-size and FOV requests were not constrained. | Validated query ranges, fixed sizes, bounded transport responses, request serialization and nonpersistent cache. |
-| P1 | Eye sampling treated a perspective image as an angular panorama and clamped all rear receptors onto edge pixels. | Pinhole ray projection and explicit out-of-view masking. Retina angular calibration itself remains approximate. |
-| P2 | Fly limbs omitted trochanters, sex combs were blocks, stance geometry lifted feet off the ground, and rest wings pointed forward. | Added leg segments, individual foreleg teeth, inverse-kinematic stance feet, corrected wing fold, posterior pigmentation and fine surface details. |
-| P2 | Procedural geometry could not justify a high-fidelity reconstruction claim. | Added the published Janelia/DeepMind female flybody reference (85 original mesh parts, 272,550 triangles), pinned provenance, source hashes, rebuild script and Apache-2.0 license. Retained labelled male illustration. |
-| P2 | Pause/disconnection could leave the world moving on old motor values. | Route-owned world, pause checkpoints, stop generation/cancellation, connection-loss stop, frozen model settings during trials. |
-| P2 | Neural records could precede image exposure or retain old smoothing after reset. | Reset acknowledgement, smoothing reset, at least 100 ms biological exposure before each sample. |
-| P2 | Server had no simulation/broadcast shutdown cleanup. | Added shutdown handling. |
+| Learned memory, seed 1 | Recognized finish; arrived | 103 m |
+| Learned memory, seed 2 | Recognized finish; arrived | 103 m |
+| Memory disabled, seed 1 | Stopped without knowing a direction | 0 m |
+| Eyes covered, seed 1 | Stopped without vision | 0 m |
+| Learned wrong turn, seed 1 | Returned and recognized finish | 114 m |
 
-## What the experiment tests
+Pause held the recovery trial at 34 m; Resume completed it. Expanding Street View
+and opening brain details preserved the trip. These results establish a working
+demonstrated-route experiment, not general city-wide reliability.
 
-The teacher resolves A/B to outdoor Google panoramas, searches the actual link
-graph, and captures a reference looking along each chosen exit. In a trial each
-stop starts with a seeded 15–27° heading error. Normalized cross-correlation of
-angular luminance samples estimates the error; the controller corrects it and
-requires two observations within 3°. A weak or ambiguous match halts movement.
-Traversal then follows the taught link at a virtual 4 m/s. The observation
-matcher cannot access GPS, destination coordinates, panorama IDs or link headings.
-The teacher and transition scheduler can access those values.
+## Sources
 
-This is **route following with taught visual alignment**, not novel-route visual
-SLAM, semantic street understanding, collision-aware flight, learned homing or
-biological proof of cognition. It observes only a forward 120° camera view, with
-off-camera receptors masked; it is not a 360° compound-eye rendering. The same
-panorama's shifted views are an intentionally easier task than cross-location
-visual place recognition. Identical seeds reproduce perturbations, but Google
-imagery, GPU stochastic streams, timing and neural records are not guaranteed
-bit-for-bit reproducible across sessions.
-
-An occlusion trial must record `occluded`, travel zero metres and stay at A.
-An intact trial can record `arrived` only at B's snapped panorama, after connected
-transitions and valid observations. Missing coverage/API activation, low texture,
-budget exhaustion, stalled simulation or cancellation must never count as arrival.
-
-## Remaining scientific limitations
-
-- The imported anatomical specimen is female while MaleCNS is male. This is
-  disclosed in the viewer and metadata. The male alternative is an illustration,
-  not a measured reconstruction. No shared whole-animal biological validation is
-  claimed for either option.
-- Research mesh topology and joint placement are retained, but browser motion is
-  illustrative. MuJoCo contacts, body forces, trained policies, wing aerodynamics,
-  haltere feedback and muscle dynamics are not simulated.
-- The connectome retains the original inverse photoreceptor-drive convention,
-  lamina hold and lLN transmitter override. The route controller does not repair
-  or validate the inactive graded-cell motion circuit.
-- Soma-derived retinal angles, approximate transmitter signs, thresholded edge
-  counts and a common LIF model remain modelling assumptions. Existing raster
-  findings were supplied by the repository and were not all rerun in this audit.
-- This is a local, single-experiment lab. Multiple browser clients share one
-  global brain. Do not run competing experiments from multiple tabs.
-- Arrival is graph-based. Street View imagery is discontinuous, vehicle-height,
-  potentially old and not a metric simulation of a fruit fly's environment.
-
-## Validation evidence
-
-- Existing environment: PyTorch 2.11.0+cu128, NVIDIA RTX 5090; live CUDA graph and
-  neural readouts observed in the browser.
-- After project API activation, real Google Maps display, Street View metadata
-  (`OK`) and Static imagery (`200 image/jpeg`) were verified.
-- A live intact trial on the default Toronto route reached B's snapped panorama:
-  one connected step, 15 m, three visual observations, final heading error 0°.
-  The session used five image requests including teaching and arrival imagery.
-  The first panorama lookup returned Google's transient `UNKNOWN_ERROR`;
-  repeating Teach route succeeded. One short successful route does not establish
-  reliability across arbitrary streets or imagery conditions.
-- Live backend smoke passed: 165,122 neurons, 1,382 retinal receptors, CUDA,
-  reset acknowledgement, binary retina reception, invalid-coordinate rejection.
-- Offline JavaScript tests cover synthetic image yaw recovery in both directions,
-  rectilinear masking, ambiguous/blank input, graph detours and cycles, coverage
-  failure, request budgets, deterministic seeds, complete trial arrival,
-  occlusion, pause/resume and stale-request cancellation.
-- Backend tests cover credentials in error messages, failed metadata caching,
-  key rotation and missing configuration.
-
-## Primary references
-
-- [Google Street View panorama service and links](https://developers.google.com/maps/documentation/javascript/reference/street-view-service).
-- [Google Street View Static camera parameters](https://developers.google.com/maps/documentation/streetview/request-streetview).
-- [Vaxenburg et al., Whole-body physics simulation of fruit fly locomotion, Nature 2025](https://doi.org/10.1038/s41586-025-09029-4).
-- [Pinned anatomy source and license](https://github.com/google-deepmind/mujoco_menagerie/tree/ac6b2b09983786f3036cab1000221017fa2193b4/flybody).
-- [Held et al., Drosophila leg and sex-comb anatomy](https://www.depts.ttu.edu/biology/people/Faculty/Held/DISHeldEtAl2018.pdf).
+- [Google Street View service](https://developers.google.com/maps/documentation/javascript/reference/street-view-service).
+- [Google Static camera parameters](https://developers.google.com/maps/documentation/streetview/request-streetview).
+- [OSM highway tags](https://wiki.openstreetmap.org/wiki/Key:highway) and [Overpass QL](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL).
+- [Flybody research](https://doi.org/10.1038/s41586-025-09029-4) and [pinned anatomy source](https://github.com/google-deepmind/mujoco_menagerie/tree/ac6b2b09983786f3036cab1000221017fa2193b4/flybody).
