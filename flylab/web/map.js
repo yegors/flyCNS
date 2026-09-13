@@ -160,10 +160,11 @@ export class MapView {
     this.el.querySelector('.map-hud').hidden = !!nav?.active || !this.showHud;
     this.el.querySelector('#hud-toggle').hidden = !!nav?.active;
     if (nav?.active) {
+      nav.manual?.tick(dt);
       const w = this.w, p = this.adapter.project(w.lat, w.lng);
       if (p) this.flyEl.style.transform = `translate(${p.x - 60}px, ${p.y - 60}px)`;
       this.fly.group.rotation.y = -w.heading * DEG;
-      this.fly.update(dt, nav.motor, this.t); this.renderer.render(this.scene, this.camera);
+      this.fly.update(dt, nav.motorSignals, this.t); this.renderer.render(this.scene, this.camera);
       return;
     }
     const m = this.app.ema, w = this.w;

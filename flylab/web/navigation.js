@@ -1,5 +1,6 @@
 import { distance, parsePoint, seededRandom, planRoute, describeImage } from './navigation-core.js';
 import { StreetGraph, VisualMemory, pathLength, pointAlong, matchMemory } from './street-learning.js';
+import { ManualControl } from './manual-control.js';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const ZERO = { cmd: 'senses', odor_L: 0, odor_R: 0, sugar: 0, loom: 0, hunger: 0, wander_L: 0, wander_R: 0 };
@@ -11,6 +12,7 @@ export class NavigationLab {
     this.app = app; this.state = 'idle'; this.route = []; this.epoch = 0; this.markers = [];
     this.motor = {}; this.owned = true; this.memory = new VisualMemory(); this.samples = [];
     this.imageRequests = 0; this.nodeRequests = 0; this.history = [];
+    this.manual = new ManualControl(this);
   }
   mount(el) {
     this.el = el;
@@ -47,8 +49,27 @@ export class NavigationLab {
     }
     this.ownWorld(); this.drawPoints(); this.setState('idle');
   }
-  get busy() { return ['preparing', 'running', 'paused'].includes(this.state); }
+  get busy() { return ['preparing', 'placing', 'running', 'paused'].includes(this.state); }
   get active() { return true; }
+  get motorSignals() { return this.busy ? this.motor : this.app.frame?.playing ? this.app.ema : {}; }
+  async placeForManual() {
+    this.epoch++; const epoch = this.epoch; this.abort?.abort(); this.abort = new AbortController();
+    this.setState('placing'); this.status('Placing your fly on the start street…');
+    try {
+      const a = parsePoint(this.q('#nav-a').value);
+      if (this.app.views.map.adapter.name !== 'Google Maps') throw new Error('Google Maps must be connected to use street movement.');
+      const response = await fetch(`/api/roads?lat=${a.lat}&lng=${a.lng}`, { signal: this.abort.signal });
+      const roads = await response.json(); if (!response.ok) throw new Error(typeof roads.detail === 'string' ? roads.detail : 'Choose a supported city street.');
+      await this.checkpoint(epoch); this.streets = new StreetGraph(roads.elements); this.nodes = new Map(); this.nodeRequests = 0;
+      const point = this.streets.snap(a, 60); if (!point) throw new Error('Choose a start point near a public city street.');
+      const { StreetViewService } = await google.maps.importLibrary('streetView'); this.service = new StreetViewService();
+      const node = await this.rawNode({ location: { lat: point.lat, lng: point.lng }, radius: 35, preference: 'nearest', sources: ['outdoor', 'google'] }, epoch);
+      if (!node.road) throw new Error('The nearest photo is off the road. Choose another start.');
+      await this.environmentNode(node.id, epoch); await this.checkpoint(epoch);
+      this.place(node, node.heading); this.app.views.map.adapter.setCenter(node.road.lat, node.road.lng);
+      this.setState('idle'); this.status('Manual street control ready. You can also Learn trip for an automatic memory test.');
+    } catch (error) { if (epoch === this.epoch) { this.setState('error'); this.status(error.message); } throw error; }
+  }
   mapClick(lat, lng) {
     if (!this.busy && this.pick) {
       const which = this.pick; this.pick = null;
@@ -59,6 +80,8 @@ export class NavigationLab {
   }
   invalidate(message = 'Points selected. Learn this trip before trying it.') {
     if (this.busy) return;
+    this.manual.halt(true); this.currentNode = null; this.streets = null;
+    this.app.send({ cmd: 'clear' });
     this.epoch++; this.abort?.abort(); this.memory.clear(); this.route = []; this.recovery = null;
     this.trial = null; this.history = []; this.samples = []; this.motor = {}; this.pick = null;
     this.line?.setMap(null); this.app.views.eyes.setSource('off', true);
@@ -70,8 +93,8 @@ export class NavigationLab {
   status(text) { this.q('#nav-status').textContent = text; }
   setState(state) {
     this.state = state;
-    const labels = { idle: 'Ready', preparing: 'Learning', ready: 'Learned', running: 'Exploring', paused: 'Paused', arrived: 'Made it!', stopped: 'Stopped', failed: 'Stopped safely', occluded: 'Eyes covered', untrained: 'No memory', error: 'Needs attention' };
-    this.q('#nav-state').textContent = labels[state] || state;
+    const labels = { idle: 'Ready', placing: 'Placing on street', preparing: 'Learning', ready: 'Learned', running: 'Exploring', paused: 'Paused', arrived: 'Made it!', stopped: 'Stopped', failed: 'Stopped safely', occluded: 'Eyes covered', untrained: 'No memory', error: 'Needs attention' };
+    this.q('#nav-state').textContent = state === 'manual' ? 'Brain control' : labels[state] || state;
     this.q('#nav-state').dataset.state = state;
     this.q('#nav-prepare').disabled = this.busy;
     this.q('#nav-start').disabled = this.busy || this.route.length < 2 || !this.memory.size;
@@ -84,10 +107,12 @@ export class NavigationLab {
     for (const which of ['a', 'b']) this.q(`#nav-pick-${which}`).textContent = which === 'a' ? 'Choose start on map' : 'Choose finish on map';
   }
   ownWorld() {
+    this.manual.halt(true);
     this.owned = true; this.motor = {}; this.app.send({ cmd: 'clear' }); this.app.send(ZERO);
     this.app.views.eyes.setSource('off', true); this.app.views.map.frozen = true;
   }
   stop(reason = 'Stopped. Your learned memories are still here.') {
+    this.manual.halt();
     this.epoch++; this.abort?.abort(); this.motor = {}; this.app.send(ZERO);
     this.app.views.eyes.holdNavigation?.();
     if (this.trial && ['running', 'paused'].includes(this.state)) this.finish('stopped', reason);
@@ -163,6 +188,7 @@ export class NavigationLab {
   }
   async prepare() {
     if (this.busy) return;
+    this.currentNode = null;
     this.epoch++; const epoch = this.epoch; this.abort?.abort(); this.abort = new AbortController();
     this.route = []; this.trial = null; this.memory.clear(); this.history = []; this.samples = []; this.recovery = null; this.pick = null;
     this.nodes = new Map(); this.imageRequests = 0; this.nodeRequests = 0; this.line?.setMap(null);
@@ -222,6 +248,7 @@ export class NavigationLab {
   }
   routeLength() { return this.route.slice(1).reduce((sum, n, i) => sum + pathLength(this.route[i].links.find(l => l.id === n.id).path), 0); }
   place(node, heading) {
+    this.currentNode = node;
     const map = this.app.views.map, p = node.road || node;
     map.snapTo(p.lat, p.lng); map.w.heading = heading; map.w.speed = 0;
   }

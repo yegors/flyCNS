@@ -145,7 +145,7 @@ export class EyesView {
     else if (this.source === 'left' || this.source === 'right') this.drawHalf(this.source);
     else if (this.source === 'street') this.fetchStreet(w);
     const now = performance.now();
-    if (!this.navigationHeld && this.source !== 'off' && (this.source !== 'street' || this.hasImage) && this.app.navigation?.state !== 'paused' && now - this.lastSend > 100) { this.lastSend = now; this.sample(); }
+    if (this.app.frame?.playing && !this.navigationHeld && this.source !== 'off' && (this.source !== 'street' || this.hasImage) && this.app.navigation?.state !== 'paused' && now - this.lastSend > 100) { this.lastSend = now; this.sample(); }
     // draw
     const c = this.canvas, g = this.ctx, cw = c.width, ch = c.height;
     g.fillStyle = '#000'; g.fillRect(0, 0, cw, ch);

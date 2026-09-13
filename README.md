@@ -27,8 +27,19 @@ Open http://127.0.0.1:8001. The default is a short trip along Bay Street, Toront
 5. Choose new points with **Choose start/finish on map**, or enter coordinates in
    the collapsed section. **Forget trip** clears memories. Reload also clears them.
 
-**Brain details** reveals the original neuroscience instruments. They are hidden
-by default so the main screen stays focused on the street journey.
+Four live tiles (Street View, map, brain, and body) always fill the main area.
+The fifth sidebar keeps **Walk**, **Back up**, **Turn left/right**, **Groom**,
+**Taste sugar/bitter**, **Alarm / jump**, signal strength, pause and stop visible.
+The trip workflow and full brain instruments scroll underneath those controls.
+
+For manual control, turn while stopped, then switch **Walk** on. These buttons
+stimulate named neuron groups; they do not model chemical concentrations. Neural
+walking/backward activity sets speed, and left/right steering activity sets the
+viewing direction at street stops. Between stops movement stays on the road;
+backing up retraces the current segment. **Stop all signals** stops immediately.
+**Pause brain** freezes movement and **Resume brain** continues it. The visual
+memory trip uses a separate controller; starting a lesson or trial ends manual
+control. Neither controller models traffic or lane-level driving.
 
 Movement follows connected public OSM roads and basic one-way rules. No buildings
 are crossed to shortcut the trip. Google Street View supplies the photos, while

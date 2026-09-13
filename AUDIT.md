@@ -3,8 +3,12 @@
 ## What this version builds
 
 A local visual-memory learning experiment over real Google Street View photos.
-The main workflow is **choose A/B → Learn trip → Try from memory**. Brain tools
-are optional. The detailed Janelia/DeepMind female fly body remains available;
+The trip workflow is **choose A/B → Learn trip → Try from memory**. Four live
+tiles stay visible, with manual stimulation pinned above a scrolling sidebar.
+Manual street movement uses neural readouts for speed and steering; the road
+boundary and conversion from firing rates to motion are engineered constraints.
+This is separate from the memory learner and is not a chemical or muscle model.
+The detailed Janelia/DeepMind female fly body remains available;
 MaleCNS is male, and body motion is illustrative rather than physical simulation.
 
 ## Learning and testing are separate
@@ -99,3 +103,18 @@ demonstrated-route experiment, not general city-wide reliability.
 - [Google Static camera parameters](https://developers.google.com/maps/documentation/streetview/request-streetview).
 - [OSM highway tags](https://wiki.openstreetmap.org/wiki/Key:highway) and [Overpass QL](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL).
 - [Flybody research](https://doi.org/10.1038/s41586-025-09029-4) and [pinned anatomy source](https://github.com/google-deepmind/mujoco_menagerie/tree/ac6b2b09983786f3036cab1000221017fa2193b4/flybody).
+
+## Full-window controls validation
+
+The four tiles were checked at 1920×1080 and 3310×1982. Their lower edge stays
+12 px from the viewport bottom, and the Street View canvas remains inside its
+tile after resizing. The stimulation panel stays pinned while details scroll.
+Live manual movement followed Bay Street; Stop cleared all active controls, and
+Pause received a server acknowledgement and displayed Resume brain. Control
+acknowledgements now work without simulation frames, including while paused.
+
+Regression checks: 26 JavaScript tests and 10 Python tests pass. Added coverage
+includes neural road movement, backing up, pausing, awaiting the first photo,
+cancelling a pending photo, resuming a segment, and control acknowledgements.
+The browser reported no console errors in the final live check. This is bounded
+validation, not a guarantee that every route or control combination is bug-free.

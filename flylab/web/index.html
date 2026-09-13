@@ -12,14 +12,9 @@
             "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
 </head>
-<body class="buddy-mode">
+<body class="buddy-mode show-brain">
 <header>
   <div class="brand"><span class="logo">🪰</span><b>Fly buddy</b><span class="muted">Street journeys</span></div>
-  <nav id="tabs">
-    <button data-view="lab" class="on">Journey</button>
-    <button data-view="experiments">Experiments</button>
-  </nav>
-  <button id="btn-details" aria-pressed="false">Brain details</button>
   <span id="connection" role="status">Connecting…</span>
   <div class="stats" id="stats">
     <div class="stat"><span class="k">fly time</span><span class="v mono" id="st-time">0.00 s</span></div>
@@ -28,37 +23,51 @@
     <div class="stat"><span class="k">firing now</span><span class="v mono" id="st-act">0</span></div>
     <div class="stat"><span class="k">engine</span><span class="v mono" id="st-eng">connecting…</span></div>
   </div>
-  <div class="actions">
-    <button id="btn-play" title="space">⏸ pause</button>
-    <button id="btn-reset" title="reset the brain to silence">↺ reset</button>
-  </div>
 </header>
 <main id="view">
   <div id="lab" class="lab">
     <section class="panel" data-panel="map">
-      <div class="ph"><b>Your trip</b><span class="muted" id="map-sub">Streets © OpenStreetMap contributors</span><button class="exp" title="Expand map" aria-label="Expand map">⤢</button></div>
+      <div class="ph"><b>Your trip</b><span class="muted" id="map-sub">Streets © OpenStreetMap contributors</span></div>
       <div class="pb" id="p-map"></div>
     </section>
     <section class="panel" data-panel="brain">
-      <div class="ph"><b>Brain</b><span class="muted" id="brain-sub">165,122 neurons, live</span><button class="exp" title="expand">⤢</button></div>
+      <div class="ph"><b>Brain</b><span class="muted" id="brain-sub">165,122 neurons, live</span></div>
       <div class="pb" id="p-brain"></div>
     </section>
     <section class="panel" data-panel="eyes">
-      <div class="ph"><b>What your fly sees</b><span class="muted" id="eyes-sub">Google Street View</span><button class="exp" title="Expand street view" aria-label="Expand street view">⤢</button></div>
+      <div class="ph"><b>What your fly sees</b><span class="muted" id="eyes-sub">Google Street View</span></div>
       <div class="pb" id="p-eyes"></div>
     </section>
     <section class="panel" data-panel="fly">
-      <div class="ph"><b>Your buddy</b><span class="muted" id="fly-sub">Drag to look around</span><button class="exp" title="Expand fly" aria-label="Expand fly">⤢</button></div>
+      <div class="ph"><b>Your buddy</b><span class="muted" id="fly-sub">Drag to look around</span></div>
       <div class="pb" id="p-fly"></div>
     </section>
   </div>
-  <div id="experiments" hidden></div>
+
 </main>
-<aside id="panel">
+<aside id="panel" aria-label="Brain and fly controls">
+  <section id="quick-controls">
+    <div class="nav-heading"><h2>Brain &amp; fly controls</h2><span class="eyebrow">LIVE</span></div>
+    <p class="small muted">Switch a signal on or off. This stimulates neurons, not chemical doses.</p>
+    <div class="quick-grid" id="quick-signals">
+      <button disabled data-group="walk_forward">Walk</button>
+      <button disabled data-group="backward">Back up</button>
+      <button disabled data-group="steer" data-side="L">Turn left</button>
+      <button disabled data-group="steer" data-side="R">Turn right</button>
+      <button disabled data-group="groom">Groom</button>
+      <button disabled data-group="sugar">Taste sugar</button>
+      <button disabled data-group="bitter">Taste bitter</button>
+      <button disabled data-group="looming">Alarm / jump</button>
+    </div>
+    <div class="slider"><label for="quick-rate">Signal strength <span id="quick-rate-label">150 Hz</span></label><input id="quick-rate" type="range" min="5" max="200" value="150" step="5"></div>
+    <div class="row"><button disabled id="quick-stop" class="stop-all">Stop all signals</button><button disabled id="btn-play">Pause brain</button><button id="btn-reset">Reset</button></div>
+    <p id="manual-status" role="status">Walk follows the street. Turns take effect at photo stops.</p>
+  </section>
+  <div class="sidebar-scroll">
   <section id="navigation-lab"></section>
   <div id="brain-tools">
   <section>
-    <h3>Stimulate <span class="muted" id="rate-label">150 Hz</span></h3>
+    <h3>All brain signals <span class="muted" id="rate-label">150 Hz</span></h3>
     <input type="range" id="rate" min="5" max="200" value="150" step="5">
     <div id="stims"></div>
     <div class="row"><button id="btn-clear" class="small">clear all</button><span class="muted small">hover a chip to see the neurons</span></div>
@@ -79,9 +88,11 @@
     <canvas id="spark" width="300" height="64"></canvas>
   </section>
   <section id="hint" class="muted small">
-    <b>What the brain panel shows.</b> The memory learner chooses street directions. The simulated MaleCNS brain receives visual input and its responses appear here; its connections are not learning the trip. Retinal directions are approximate. The detailed body is female and its movement is animated.
+    <b>What the brain panel shows.</b> Manual controls stimulate the brain; its walking and turning responses move the fly along streets. In a memory trial, a separate learner chooses directions. The simulated MaleCNS brain receives visual input; its connections are not learning the trip. Retinal directions are approximate. The detailed body is female and its movement is animated.
   </section>
 </div>
+  <details id="experiment-library"><summary>Earlier experiments</summary><div id="experiments"></div></details>
+  </div>
 </aside>
 <div id="tooltip" hidden></div>
 <div id="toast" hidden></div>

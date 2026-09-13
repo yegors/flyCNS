@@ -190,6 +190,11 @@ class Lab:
                             self.drives["sense:" + name] = round(val * mx, 1)
                         else:
                             self.drives.pop("sense:" + name, None)
+            # Pausing stops binary simulation frames. A separate acknowledgement
+            # keeps every client responsive even while the brain is paused.
+            if cmd in {"drive", "clear", "reset", "fix", "vision", "play", "pause", "speed"}:
+                self.push(json.dumps({"event": "control", "playing": self.playing,
+                                      "drives": self.drives, "fix": self.fix_on}).encode(), text=True)
         except Exception as e:  # a bad command must not kill the sim thread
             self.push(json.dumps({"error": f"{cmd}: {e}"}).encode(), text=True)
 

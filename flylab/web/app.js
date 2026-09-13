@@ -47,40 +47,18 @@ async function main() {
   ]);
   app.navigation = new NavigationLab(app);
   app.navigation.mount($('#navigation-lab'));
-  $('#btn-details').onclick = () => {
-    const on = document.body.classList.toggle('show-brain');
-    $('#btn-details').setAttribute('aria-pressed', String(on));
-    $('#btn-details').textContent = on ? 'Hide brain details' : 'Brain details';
-    if (!on && app.tab !== 'lab') showTab('lab');
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('max'));
-    $('#lab').classList.remove('has-max');
-    document.querySelectorAll('.panel .exp').forEach(button => {
-      const name = { map: 'map', eyes: 'street view', brain: 'brain', fly: 'fly' }[button.closest('.panel').dataset.panel];
-      button.textContent = '⤢'; button.setAttribute('aria-label', `Expand ${name}`);
-    });
-    setTimeout(resizeAll, 30);
-  };
   const ro = new ResizeObserver(() => resizeAll());
   document.querySelectorAll('.pb').forEach((el) => ro.observe(el));
-  document.querMaxHandlers = document.querySelectorAll('.panel .exp').forEach((b) => (b.onclick = () => {
-    const p = b.closest('.panel'), lab = $('#lab');
-    const on = !p.classList.contains('max');
-    document.querySelectorAll('.panel').forEach((x) => x.classList.remove('max'));
-    lab.classList.toggle('has-max', on); if (on) p.classList.add('max');
-    b.textContent = on ? '⤡' : '⤢';
-    for (const button of document.querySelectorAll('.panel .exp')) {
-      const name = { map: 'map', eyes: 'street view', brain: 'brain', fly: 'fly' }[button.closest('.panel').dataset.panel];
-      button.setAttribute('aria-label', button === b && on ? 'Return to overview' : `Expand ${name}`);
-      if (button !== b) button.textContent = '⤢';
-    }
-    setTimeout(resizeAll, 30);
-  }));
-  $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showTab(b.dataset.view); });
+  $('#experiment-library').ontoggle = e => {
+    if (e.target.open) app.views.experiments.mount($('#experiments'));
+    else app.views.experiments.unmount();
+  };
+  wireQuickControls();
   connect();
   requestAnimationFrame(loop);
   $('#btn-play').onclick = () => { if (['running', 'paused'].includes(app.navigation.state)) app.navigation.pause(); else app.send({ cmd: app.frame && app.frame.playing ? 'pause' : 'play' }); };
-  $('#btn-reset').onclick = () => { if (app.navigation.busy) app.navigation.stop('Trial stopped by brain reset.'); app.send({ cmd: 'reset' }); app.toast('brain reset to silence'); };
-  $('#btn-clear').onclick = () => { if (app.navigation.busy) app.navigation.stop('Trial stopped by clear.'); app.send({ cmd: 'clear' }); app.views.eyes.setSource('off'); };
+  $('#btn-reset').onclick = () => { app.navigation.manual.halt(); if (app.navigation.busy) app.navigation.stop('Trial stopped by brain reset.'); app.send({ cmd: 'reset' }); app.toast('brain reset to silence'); };
+  $('#btn-clear').onclick = () => { app.navigation.manual.halt(); if (app.navigation.busy) app.navigation.stop('Trial stopped by clear.'); app.send({ cmd: 'clear' }); app.views.eyes.setSource('off', true); };
   $('#fix').onchange = (e) => app.send({ cmd: 'fix', on: e.target.checked });
   $('#rate').oninput = (e) => ($('#rate-label').textContent = e.target.value + ' Hz');
   const vision = () => {
@@ -96,16 +74,51 @@ async function main() {
   window.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); $('#btn-play').click(); } });
   window.addEventListener('resize', resizeAll);
   $('#st-eng').textContent = app.cfg.sim.graph ? `CUDA graph · ${app.cfg.sim.graph_kind}` : app.cfg.sim.device;
-  if (location.hash === '#experiments') showTab('experiments');
+  if (location.hash === '#experiments') $('#experiment-library').open = true;
 }
 
 function resizeAll() { for (const k of ['brain', 'fly', 'map', 'eyes']) app.views[k] && app.views[k].resize && app.views[k].resize(); }
 
-function showTab(name) {
-  app.tab = name; location.hash = name === 'lab' ? '' : name;
-  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === name));
-  $('#lab').hidden = name !== 'lab'; $('#experiments').hidden = name !== 'experiments';
-  if (name === 'experiments') app.views.experiments.mount($('#experiments')); else { app.views.experiments.unmount(); setTimeout(resizeAll, 30); }
+
+async function sendSignal(group, side, rate) {
+  if (app.navigation?.busy || app.signalPending || app.ws?.readyState !== 1) return;
+  const serial = app.signalSerial || 0;
+  app.signalPending = true;
+  try {
+    if (rate && ['walk_forward', 'backward', 'steer'].includes(group)) {
+      if (!await app.navigation.manual.enable() || serial !== (app.signalSerial || 0)) return;
+    }
+    if (serial !== (app.signalSerial || 0)) return;
+    // Opposing command channels should not silently fight each other.
+    if (rate && ['walk_forward', 'backward'].includes(group)) app.send({cmd:'drive',group:group === 'walk_forward' ? 'backward' : 'walk_forward',rate:0});
+    if (rate && group === 'steer') app.send({cmd:'drive',group:'steer',side:side === 'L' ? 'R' : 'L',rate:0});
+    app.send({cmd:'drive',group,side,rate});
+    if (rate) app.send({cmd:'play'});
+  } finally { app.signalPending = false; }
+}
+function wireQuickControls() {
+  for (const button of document.querySelectorAll('#quick-signals button')) {
+    button.setAttribute('aria-pressed','false');
+    button.onclick = () => {
+      const group=button.dataset.group, side=button.dataset.side || null, key=group+(side?':'+side:'');
+      sendSignal(group,side,key in app.drives ? 0 : +$('#quick-rate').value);
+    };
+  }
+  $('#quick-rate').oninput = e => {
+    const rate=+e.target.value;
+    $('#quick-rate-label').textContent=rate+' Hz'; $('#rate-label').textContent=rate+' Hz'; $('#rate').value=rate;
+    if (!app.navigation.busy) for (const c of document.querySelectorAll('.chip')) {
+      const group=c.dataset.group, side=c.dataset.side || null, key=group+(side?':'+side:'');
+      if (key in app.drives) app.send({cmd:'drive',group,side,rate});
+    }
+  };
+  $('#quick-stop').onclick = () => {
+    app.signalSerial=(app.signalSerial||0)+1;
+    app.navigation.manual.halt();
+    if (app.navigation.busy) app.navigation.stop('Stopped by the manual controls.');
+    app.send({cmd:'clear'}); app.views.eyes.holdNavigation();
+    $('#manual-status').textContent='All signals off. The fly is stopped.';
+  };
 }
 
 function buildPanel() {
@@ -118,7 +131,7 @@ function buildPanel() {
       const alias = app.cfg.aliases.find((a) => a.name === name);
       const sides = name === 'steer' ? ['L', 'R'] : [null];
       for (const side of sides) {
-        const c = document.createElement('span'); c.className = 'chip';
+        const c = document.createElement('button'); c.type = 'button'; c.disabled = true; c.className = 'chip'; c.setAttribute('aria-pressed', 'false');
         c.dataset.group = name; if (side) c.dataset.side = side;
         const label = side ? (side === 'L' ? '◀ steer L' : 'steer R ▶') : name.replace('type:', '');
         c.innerHTML = `${label} <span class="n">${alias ? (side ? Math.round(alias.n / 2) : alias.n) : ''}</span>`;
@@ -127,7 +140,7 @@ function buildPanel() {
           if (app.navigation?.busy) { app.toast('Stop the trial before changing stimuli.'); return; }
           const key = name + (side ? ':' + side : '');
           const on = !(key in app.drives);
-          app.send({ cmd: 'drive', group: name, side, rate: on ? +$('#rate').value : 0 });
+          sendSignal(name, side, on ? +$('#rate').value : 0);
         };
         c.onmouseenter = async () => { const idx = await app.group(name, side); app.views.brain.highlight && app.views.brain.highlight(idx); };
         c.onmouseleave = () => { app.views.brain.highlight && app.views.brain.highlight(null); };
@@ -148,14 +161,20 @@ function connect() {
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   ws.binaryType = 'arraybuffer';
   app.ws = ws;
-  ws.onclose = () => { $('#st-eng').textContent = 'disconnected'; $('#connection').textContent = 'Reconnecting…'; if (app.navigation?.busy) app.navigation.stop('Connection lost. Stopped safely; wait for reconnection.'); setTimeout(connect, 1500); };
+  ws.onclose = () => { app.navigation?.manual.halt(); $('#st-eng').textContent = 'disconnected'; $('#connection').textContent = 'Reconnecting…'; if (app.navigation?.busy) app.navigation.stop('Connection lost. Stopped safely; wait for reconnection.'); setTimeout(connect, 1500); };
   ws.onopen = () => { $('#connection').textContent = '● Connected'; };
   ws.onmessage = (ev) => {
     if (typeof ev.data === 'string') {
       const m = JSON.parse(ev.data);
       if (m.error) app.toast('⚠ ' + m.error);
       if (m.event === 'reset') { app.resetSerial = (app.resetSerial || 0) + 1; app.ema = {}; }
-      if (m.hello) { app.drives = m.drives || {}; $('#fix').checked = !!m.fix; $('#st-eng').textContent = m.sim.graph ? `CUDA graph · ${m.sim.graph_kind}` : m.sim.device; }
+      if (m.hello || m.event === 'control') {
+        app.drives = m.drives || {};
+        app.frame = {t:0, active:0, spikes:0, tick_ms:10, active_n:{}, ...app.frame, playing:m.playing, drives:app.drives, fix:m.fix};
+        updateDom(app.frame);
+        $('#quick-stop').disabled = false; $('#btn-play').disabled = false;
+        if (m.hello) { $('#fix').checked = !!m.fix; $('#st-eng').textContent = m.sim.graph ? `CUDA graph · ${m.sim.graph_kind}` : m.sim.device; }
+      }
       return;
     }
     const dv = new DataView(ev.data);
@@ -182,15 +201,16 @@ function onFrame(h, idx) {
 }
 
 function updateDom(h) {
+  $('#quick-rate').disabled = !!app.navigation?.busy;
   $('#st-time').textContent = (h.t / 1000).toFixed(2) + ' s';
   $('#st-rt').textContent = app.rt.toFixed(2) + '×';
   $('#st-spk').textContent = Math.round(h.spikes * 1000 / h.tick_ms).toLocaleString();
   $('#st-act').textContent = h.active.toLocaleString();
-  $('#btn-play').textContent = app.navigation?.state === 'paused' ? '▶ resume trial' : h.playing ? '⏸ pause' : '▶ play';
+  $('#btn-play').textContent = app.navigation?.state === 'paused' ? 'Resume trip' : h.playing ? 'Pause brain' : 'Resume brain';
   if (document.activeElement !== $('#fix')) $('#fix').checked = !!h.fix;
-  document.querySelectorAll('.chip').forEach((c) => {
+  document.querySelectorAll('.chip, #quick-signals button').forEach((c) => {
     const key = c.dataset.group + (c.dataset.side ? ':' + c.dataset.side : '');
-    c.classList.toggle('on', key in app.drives);
+    c.classList.toggle('on', key in app.drives); c.setAttribute('aria-pressed', String(key in app.drives)); c.disabled = !!app.navigation?.busy || app.signalPending || app.ws?.readyState !== 1;
   });
   document.querySelectorAll('#readouts .readout').forEach((d) => {
     const v = app.ema[d.dataset.key] || 0, max = +d.dataset.max;
@@ -205,7 +225,7 @@ function updateDom(h) {
 let lastLoop = performance.now();
 function loop(now) {
   const dt = Math.min(0.1, (now - lastLoop) / 1000); lastLoop = now;
-  if (app.tab === 'lab') for (const k of ['map', 'brain', 'fly', 'eyes']) { const v = app.views[k]; if (k === 'brain' && !document.body.classList.contains('show-brain')) continue; if (v && v.render) v.render(dt); }
+  if (app.tab === 'lab') for (const k of ['map', 'brain', 'fly', 'eyes']) { const v = app.views[k]; if (v && v.render) v.render(dt); }
   drawSpark();
   requestAnimationFrame(loop);
 }
