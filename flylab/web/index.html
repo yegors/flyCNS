@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fly buddy · Street journeys</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body class="buddy-mode">
+<header>
+  <div class="brand"><span class="logo">🪰</span><b>Fly buddy</b><span class="muted">Street journeys</span></div>
+  <nav id="tabs">
+    <button data-view="lab" class="on">Journey</button>
+    <button data-view="experiments">Experiments</button>
+  </nav>
+  <button id="btn-details" aria-pressed="false">Brain details</button>
+  <span id="connection" role="status">Connecting…</span>
+  <div class="stats" id="stats">
+    <div class="stat"><span class="k">fly time</span><span class="v mono" id="st-time">0.00 s</span></div>
+    <div class="stat"><span class="k">× real time</span><span class="v mono" id="st-rt">–</span></div>
+    <div class="stat"><span class="k">spikes / s</span><span class="v mono" id="st-spk">0</span></div>
+    <div class="stat"><span class="k">firing now</span><span class="v mono" id="st-act">0</span></div>
+    <div class="stat"><span class="k">engine</span><span class="v mono" id="st-eng">connecting…</span></div>
+  </div>
+  <div class="actions">
+    <button id="btn-play" title="space">⏸ pause</button>
+    <button id="btn-reset" title="reset the brain to silence">↺ reset</button>
+  </div>
+</header>
+<main id="view">
+  <div id="lab" class="lab">
+    <section class="panel" data-panel="map">
+      <div class="ph"><b>Your trip</b><span class="muted" id="map-sub">Streets © OpenStreetMap contributors</span><button class="exp" title="Expand map" aria-label="Expand map">⤢</button></div>
+      <div class="pb" id="p-map"></div>
+    </section>
+    <section class="panel" data-panel="brain">
+      <div class="ph"><b>Brain</b><span class="muted" id="brain-sub">165,122 neurons, live</span><button class="exp" title="expand">⤢</button></div>
+      <div class="pb" id="p-brain"></div>
+    </section>
+    <section class="panel" data-panel="eyes">
+      <div class="ph"><b>What your fly sees</b><span class="muted" id="eyes-sub">Google Street View</span><button class="exp" title="Expand street view" aria-label="Expand street view">⤢</button></div>
+      <div class="pb" id="p-eyes"></div>
+    </section>
+    <section class="panel" data-panel="fly">
+      <div class="ph"><b>Your buddy</b><span class="muted" id="fly-sub">Drag to look around</span><button class="exp" title="Expand fly" aria-label="Expand fly">⤢</button></div>
+      <div class="pb" id="p-fly"></div>
+    </section>
+  </div>
+  <div id="experiments" hidden></div>
+</main>
+<aside id="panel">
+  <section id="navigation-lab"></section>
+  <div id="brain-tools">
+  <section>
+    <h3>Stimulate <span class="muted" id="rate-label">150 Hz</span></h3>
+    <input type="range" id="rate" min="5" max="200" value="150" step="5">
+    <div id="stims"></div>
+    <div class="row"><button id="btn-clear" class="small">clear all</button><span class="muted small">hover a chip to see the neurons</span></div>
+  </section>
+  <section>
+    <h3>Model settings</h3>
+    <label class="toggle"><input type="checkbox" id="fix" checked><span>lLN1/lLN2 inhibitory <span class="muted">runaway fix</span></span></label>
+    <div class="slider"><label>lamina hold <span class="mono" id="hold-label">7.5 mV</span></label><input type="range" id="hold" min="0" max="9" value="7.5" step="0.5"></div>
+    <div class="slider"><label>photoreceptor rate in dark / light <span class="mono" id="rates-label">90 / 0 Hz</span></label>
+      <div class="row"><input type="range" id="dark" min="0" max="150" value="90" step="5"><input type="range" id="light" min="0" max="150" value="0" step="5"></div></div>
+  </section>
+  <section>
+    <h3>Readouts <span class="muted">Hz, smoothed</span></h3>
+    <div id="readouts"></div>
+  </section>
+  <section>
+    <h3>Activity <span class="muted">spikes per ms</span></h3>
+    <canvas id="spark" width="300" height="64"></canvas>
+  </section>
+  <section id="hint" class="muted small">
+    <b>How the loop works.</b> Route trials use an external visual controller while the MaleCNS model receives retinal input and records responses. Free exploration uses neural motor readouts and optional map senses. Retinal directions are estimated from lamina anatomy. The published female body reference and procedural male illustration both use illustrative motion.
+  </section>
+</div>
+</aside>
+<div id="tooltip" hidden></div>
+<div id="toast" hidden></div>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

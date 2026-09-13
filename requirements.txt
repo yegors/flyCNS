@@ -1,0 +1,9 @@
+torch  # install from https://download.pytorch.org/whl/cu128 for RTX 50-series
+numpy
+pandas
+pyarrow
+matplotlib
+rich
+typer
+fastapi
+uvicorn[standard]

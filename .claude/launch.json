@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flylab",
+      "runtimeExecutable": "C:/Users/Yegor/Projects/Fuckaround/flyCNS/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "flylab", "serve", "--port", "8000"],
+      "port": 8000
+    }
+  ]
+}
